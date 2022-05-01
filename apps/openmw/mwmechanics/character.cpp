@@ -72,37 +72,18 @@ std::string getBestAttack (const ESM::Weapon* weapon)
 MWMechanics::CharacterState runStateToWalkState (MWMechanics::CharacterState state)
 {
     using namespace MWMechanics;
-    CharacterState ret = state;
     switch (state)
     {
-        case CharState_RunForward:
-            ret = CharState_WalkForward;
-            break;
-        case CharState_RunBack:
-            ret = CharState_WalkBack;
-            break;
-        case CharState_RunLeft:
-            ret = CharState_WalkLeft;
-            break;
-        case CharState_RunRight:
-            ret = CharState_WalkRight;
-            break;
-        case CharState_SwimRunForward:
-            ret = CharState_SwimWalkForward;
-            break;
-        case CharState_SwimRunBack:
-            ret = CharState_SwimWalkBack;
-            break;
-        case CharState_SwimRunLeft:
-            ret = CharState_SwimWalkLeft;
-            break;
-        case CharState_SwimRunRight:
-            ret = CharState_SwimWalkRight;
-            break;
-        default:
-            break;
+        case CharState_RunForward: return CharState_WalkForward;
+        case CharState_RunBack: return CharState_WalkBack;
+        case CharState_RunLeft: return CharState_WalkLeft;
+        case CharState_RunRight: return CharState_WalkRight;
+        case CharState_SwimRunForward: return CharState_SwimWalkForward;
+        case CharState_SwimRunBack: return CharState_SwimWalkBack;
+        case CharState_SwimRunLeft: return CharState_SwimWalkLeft;
+        case CharState_SwimRunRight: return CharState_SwimWalkRight;
+        default: return state;
     }
-    return ret;
 }
 
 float getFallDamage(const MWWorld::Ptr& ptr, float fallHeight)
@@ -1862,7 +1843,7 @@ void CharacterController::update(float duration)
         bool solid = world->isActorCollisionEnabled(mPtr);
         // Can't run and sneak while flying (see speed formula in Npc/Creature::getSpeed)
         bool sneak = cls.getCreatureStats(mPtr).getStance(MWMechanics::CreatureStats::Stance_Sneak) && !flying && !inwater;
-        bool isrunning = cls.getCreatureStats(mPtr).getStance(MWMechanics::CreatureStats::Stance_Run) && !flying;
+        bool isInRunningStance = cls.getCreatureStats(mPtr).getStance(MWMechanics::CreatureStats::Stance_Run) && !flying;
         CreatureStats &stats = cls.getCreatureStats(mPtr);
         Movement& movementSettings = cls.getMovementSettings(mPtr);
 
@@ -1887,7 +1868,7 @@ void CharacterController::update(float duration)
         // TODO: Move this check to mwinput.
         // Joystick analogue movement.
         // Due to the half way split between walking/running, we multiply speed by 2 while walking, unless a keyboard was used.
-        if (isPlayer && !isrunning && !sneak && !flying && movementSettings.mSpeedFactor <= 0.5f)
+        if (isPlayer && !isInRunningStance && !sneak && !flying && movementSettings.mSpeedFactor <= 0.5f)
             movementSettings.mSpeedFactor *= 2.f;
 
         static const bool smoothMovement = Settings::Manager::getBool("smooth movement", "Game");
@@ -1988,7 +1969,7 @@ void CharacterController::update(float duration)
         bool forcestateupdate = false;
 
         mHasMovedInXY = std::abs(vec.x())+std::abs(vec.y()) > 0.0f;
-        isrunning = isrunning && mHasMovedInXY;
+        bool isRunning = isInRunningStance && mHasMovedInXY;
 
         // advance athletics
         if(mHasMovedInXY && isPlayer)
@@ -2002,7 +1983,7 @@ void CharacterController::update(float duration)
                     mSecondsOfSwimming -= 1;
                 }
             }
-            else if(isrunning && !sneak)
+            else if(isRunning && !sneak)
             {
                 mSecondsOfRunning += duration;
                 while(mSecondsOfRunning > 1)
@@ -2034,13 +2015,12 @@ void CharacterController::update(float duration)
             {
                 if (inwater)
                 {
-                    if (!isrunning)
+                    if (!isRunning)
                         fatigueLoss = fFatigueSwimWalkBase + encumbrance * fFatigueSwimWalkMult;
                     else
                         fatigueLoss = fFatigueSwimRunBase + encumbrance * fFatigueSwimRunMult;
                 }
-                else if (isrunning)
-                    fatigueLoss = fFatigueRunBase + encumbrance * fFatigueRunMult;
+                // Note: fatigue loss while running has been intentionally removed.
             }
         }
         fatigueLoss *= duration;
@@ -2145,24 +2125,24 @@ void CharacterController::update(float duration)
             if (movementSettings.mIsStrafing)
             {
                 if(vec.x() > 0.0f)
-                    movestate = (inwater ? (isrunning ? CharState_SwimRunRight : CharState_SwimWalkRight)
+                    movestate = (inwater ? (isRunning ? CharState_SwimRunRight : CharState_SwimWalkRight)
                                          : (sneak ? CharState_SneakRight
-                                                  : (isrunning ? CharState_RunRight : CharState_WalkRight)));
+                                                  : (isRunning ? CharState_RunRight : CharState_WalkRight)));
                 else if(vec.x() < 0.0f)
-                    movestate = (inwater ? (isrunning ? CharState_SwimRunLeft : CharState_SwimWalkLeft)
+                    movestate = (inwater ? (isRunning ? CharState_SwimRunLeft : CharState_SwimWalkLeft)
                                          : (sneak ? CharState_SneakLeft
-                                                  : (isrunning ? CharState_RunLeft : CharState_WalkLeft)));
+                                                  : (isRunning ? CharState_RunLeft : CharState_WalkLeft)));
             }
             else if (vec.length2() > 0.0f)
             {
                 if (vec.y() >= 0.0f)
-                    movestate = (inwater ? (isrunning ? CharState_SwimRunForward : CharState_SwimWalkForward)
+                    movestate = (inwater ? (isRunning ? CharState_SwimRunForward : CharState_SwimWalkForward)
                                          : (sneak ? CharState_SneakForward
-                                                  : (isrunning ? CharState_RunForward : CharState_WalkForward)));
+                                                  : (isRunning ? CharState_RunForward : CharState_WalkForward)));
                 else
-                    movestate = (inwater ? (isrunning ? CharState_SwimRunBack : CharState_SwimWalkBack)
+                    movestate = (inwater ? (isRunning ? CharState_SwimRunBack : CharState_SwimWalkBack)
                                          : (sneak ? CharState_SneakBack
-                                                  : (isrunning ? CharState_RunBack : CharState_WalkBack)));
+                                                  : (isRunning ? CharState_RunBack : CharState_WalkBack)));
             }
             else
             {
